@@ -47,6 +47,10 @@ The `v*` tag workflow verifies the version, checks formatting and types, runs
 tests and package checks, publishes with OIDC and provenance, then creates a
 GitHub release. Stable versions only; the tag must exactly match `package.json`.
 
+Run the Release workflow manually from GitHub Actions to validate all release
+checks without publishing. The initial `0.1.0` was published locally; use a new
+version for the first tag-based publication after configuring trusted publishing.
+
 An npm version can only be published once. If publication succeeded but GitHub
 release creation failed, create the missing GitHub release for that existing
 tag rather than publishing the version again.

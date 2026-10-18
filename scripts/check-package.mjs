@@ -12,7 +12,9 @@ try {
     ['pack', '--json', '--pack-destination', temp],
     { encoding: 'utf8' },
   );
-  const [pack] = JSON.parse(output);
+  const packed = JSON.parse(output);
+  // npm 12 keys results by package name; earlier npm versions use an array.
+  const [pack] = Array.isArray(packed) ? packed : Object.values(packed);
   const files = pack.files.map(({ path }) => path);
   for (const entry of ['index', 'mcp', 'cli']) {
     assert(files.includes(`dist/${entry}.js`));
