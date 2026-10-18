@@ -1,0 +1,68 @@
+{
+  "name": "agentback",
+  "version": "0.1.0",
+  "description": "Collect feedback from AI agents inside your MCP server, CLI, or API and manage it in Agentback.",
+  "license": "MIT",
+  "homepage": "https://agentback.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/superagents-lab/agentback-js.git"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "default": "./dist/mcp.js"
+    },
+    "./cli": {
+      "types": "./dist/cli.d.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format:check": "prettier --check .",
+    "prepack": "npm run build",
+    "check:package": "node scripts/check-package.mjs"
+  },
+  "peerDependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "zod": "^3.25 || ^4.0"
+  },
+  "peerDependenciesMeta": {
+    "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "@types/node": "22.19.0",
+    "typescript": "5.9.3",
+    "zod": "4.6.5",
+    "vitest": "5.0.3",
+    "prettier": "3.9.9"
+  },
+  "engines": {
+    "node": ">=22.14"
+  },
+  "bugs": {
+    "url": "https://github.com/superagents-lab/agentback-js/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}
