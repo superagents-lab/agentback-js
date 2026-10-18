@@ -1,6 +1,6 @@
 {
   "name": "agentback",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Collect feedback from AI agents inside your MCP server, CLI, or API and manage it in Agentback.",
   "license": "MIT",
   "homepage": "https://agentback.app",

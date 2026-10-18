@@ -6,6 +6,10 @@ Collect feedback from AI agents inside the MCP server, CLI, or API you already s
 npm install agentback
 ```
 
+Requires Node.js 22.14 or newer. The MCP integration also needs
+`@modelcontextprotocol/sdk` and `zod`; the core client and CLI helpers can be
+used without those optional peers.
+
 Create a project in Agentback and copy its public key (`af_...`) from the Connect page. The public key is write-only, so it can ship inside a CLI or a locally installed MCP server. Keep the secret key (`af_sk_...`) on your backend.
 
 ## MCP server
