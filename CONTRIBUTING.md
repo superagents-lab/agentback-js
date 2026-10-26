@@ -36,21 +36,13 @@ No npm token is needed in GitHub. See the [npm trusted publishing documentation]
 
 ## Subsequent releases
 
-Update the version and lockfile, commit, then push a matching tag:
+Bump the version and lockfile in a pull request (`npm version patch --no-git-tag-version`)
+and merge it. Then run the Release workflow on `main` from GitHub Actions. It
+verifies the version, checks formatting and types, runs tests and package
+checks, publishes with OIDC and provenance, then creates the `v<version>` tag and
+GitHub release. Pushing a matching `v*` tag runs the same release. Stable
+versions only; a tag must exactly match `package.json`.
 
-```sh
-npm version patch
-git push origin main --follow-tags
-```
-
-The `v*` tag workflow verifies the version, checks formatting and types, runs
-tests and package checks, publishes with OIDC and provenance, then creates a
-GitHub release. Stable versions only; the tag must exactly match `package.json`.
-
-Run the Release workflow manually from GitHub Actions to validate all release
-checks without publishing. The initial `0.1.0` was published locally; use a new
-version for the first tag-based publication after configuring trusted publishing.
-
-An npm version can only be published once. If publication succeeded but GitHub
-release creation failed, create the missing GitHub release for that existing
-tag rather than publishing the version again.
+An npm version can only be published once. The workflow skips publishing when
+the version is already on npm and skips the GitHub release when it already
+exists, so re-running it after a partial failure only fills in what is missing.

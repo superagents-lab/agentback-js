@@ -1,5 +1,9 @@
 name: Release
 
+# Run this workflow on main (workflow_dispatch) to release the version in
+# package.json, or push a v<version> tag. It publishes to npm and creates the
+# GitHub Release, skipping whichever already exists, so running it on a
+# version that is already out only re-validates the package.
 on:
   push:
     tags: ['v*']
@@ -36,6 +40,7 @@ jobs:
           const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
           if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Use a stable semver version.');
           if (process.env.RELEASE_EVENT === 'push' && process.env.RELEASE_TAG !== `v${version}`) throw new Error(`Tag must be v${version}`);
+          if (process.env.RELEASE_EVENT === 'workflow_dispatch' && process.env.GITHUB_REF !== 'refs/heads/main') throw new Error('Release only from main.');
           JS
       - run: npm ci
       - run: npm run format:check
@@ -43,11 +48,20 @@ jobs:
       - run: npm test
       - run: npm run check:package
       - name: Publish with npm trusted publishing
-        if: github.event_name == 'push'
-        run: npm publish --provenance --access public
+        run: |
+          PACKAGE_SPEC=$(node -p "const { name, version } = require('./package.json'); name + '@' + version")
+          if npm view "$PACKAGE_SPEC" version >/dev/null 2>&1; then
+            echo "$PACKAGE_SPEC is already published"
+          else
+            npm publish --provenance --access public
+          fi
       - name: Create GitHub release
-        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" --verify-tag --title "$RELEASE_TAG" --generate-notes
+        run: |
+          RELEASE_TAG="v$(node -p "require('./package.json').version")"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "$RELEASE_TAG already has a GitHub Release"
+          else
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --title "$RELEASE_TAG" --generate-notes
+          fi
