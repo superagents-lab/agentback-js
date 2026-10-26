@@ -1,10 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { Agentback, AgentbackError, signAccount } from '../src/index';
-import { attachToMcp } from '../src/mcp';
-import { feedbackHint, runFeedbackCommand } from '../src/cli';
+import { McpServer as McpServerV1 } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { Client as ClientV1 } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport as InMemoryTransportV1 } from '@modelcontextprotocol/sdk/inMemory.js';
+import {
+  McpServer as McpServerV2,
+  InMemoryTransport as InMemoryTransportV2,
+} from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
+import { Client as ClientV2 } from '@modelcontextprotocol/client';
+import { Agentback, AgentbackError, signAccount } from '../src/index.js';
+import { attachToMcp } from '../src/mcp.js';
+import { feedbackHint, runFeedbackCommand } from '../src/cli.js';
 import { createHmac } from 'node:crypto';
 
 const projectKey = `af_${'a'.repeat(64)}`;
@@ -112,20 +118,76 @@ describe('Agentback client', () => {
   });
 });
 
-describe('MCP integration', () => {
+const mcpSdks = [
+  {
+    version: 'v1',
+    connect: async (attach: (server: McpServerV1) => void, name: string) => {
+      const server = new McpServerV1({ name: 'demo', version: '1.0.0' });
+      attach(server);
+      const client = new ClientV1({ name, version: '2.0' });
+      const [a, b] = InMemoryTransportV1.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      return client;
+    },
+  },
+  {
+    version: 'v2',
+    connect: async (attach: (server: McpServerV2) => void, name: string) => {
+      const server = new McpServerV2({ name: 'demo', version: '1.0.0' });
+      attach(server);
+      const client = new ClientV2({ name, version: '2.0' });
+      const [a, b] = InMemoryTransportV2.createLinkedPair();
+      await Promise.all([server.connect(a), client.connect(b)]);
+      return client;
+    },
+  },
+];
+
+describe('MCP integration (v2, 2026-07-28 protocol)', () => {
+  it('reads the client name from the per-request envelope', async () => {
+    const { calls, fetch } = recorder();
+    const [a, b] = InMemoryTransportV2.createLinkedPair();
+    const handle = serveStdio(
+      () => {
+        const server = new McpServerV2({ name: 'demo', version: '1.0.0' });
+        attachToMcp(server, new Agentback({ projectKey, fetch }), {
+          product: 'Demo',
+        });
+        return server;
+      },
+      { transport: a },
+    );
+    const client = new ClientV2(
+      { name: 'modern-agent', version: '3.1' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    );
+    await client.connect(b);
+    const result = await client.callTool({
+      name: 'send_feedback',
+      arguments: { message: 'x' },
+    });
+    await client.close();
+    await handle.close();
+    expect(result.isError).toBeFalsy();
+    expect(calls[0]!.body.agent).toEqual({ name: 'modern-agent 3.1' });
+  });
+});
+
+describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
   it('registers a feedback tool that reports the MCP client and account', async () => {
     const { calls, fetch } = recorder();
-    const server = new McpServer({ name: 'demo', version: '1.0.0' });
-    attachToMcp(server, new Agentback({ projectKey, fetch }), {
-      product: 'Demo',
-      identify: () => ({ account: 'acct', signature: 'e'.repeat(64) }),
-    });
-    const client = new Client({ name: 'test-agent', version: '2.0' });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    await Promise.all([server.connect(a), client.connect(b)]);
+    const client = await connect(
+      (server) =>
+        attachToMcp(server, new Agentback({ projectKey, fetch }), {
+          product: 'Demo',
+          identify: () => ({ account: 'acct', signature: 'e'.repeat(64) }),
+        }),
+      'test-agent',
+    );
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(['send_feedback']);
     expect(tools[0]!.description).toContain('Demo');
+    expect(tools[0]!.inputSchema.required).toEqual(['message']);
     const result = await client.callTool({
       name: 'send_feedback',
       arguments: { message: 'No dates', category: 'bug', model: 'm-1' },
@@ -140,19 +202,35 @@ describe('MCP integration', () => {
       account_signature: 'e'.repeat(64),
     });
   });
-  it('reports failures as tool errors without throwing', async () => {
-    const server = new McpServer({ name: 'demo', version: '1.0.0' });
-    attachToMcp(
-      server,
-      new Agentback({
-        projectKey,
-        fetch: recorder(503, { error: 'Down.' }).fetch,
-      }),
-      { product: 'Demo' },
+  it('rejects invalid arguments before sending', async () => {
+    const { calls, fetch } = recorder();
+    const client = await connect(
+      (server) =>
+        attachToMcp(server, new Agentback({ projectKey, fetch }), {
+          product: 'Demo',
+        }),
+      'agent',
     );
-    const client = new Client({ name: 'agent', version: '1' });
-    const [a, b] = InMemoryTransport.createLinkedPair();
-    await Promise.all([server.connect(a), client.connect(b)]);
+    const result = await client.callTool({
+      name: 'send_feedback',
+      arguments: { message: '', category: 'praise' },
+    });
+    expect(result.isError).toBe(true);
+    expect(calls).toHaveLength(0);
+  });
+  it('reports failures as tool errors without throwing', async () => {
+    const client = await connect(
+      (server) =>
+        attachToMcp(
+          server,
+          new Agentback({
+            projectKey,
+            fetch: recorder(503, { error: 'Down.' }).fetch,
+          }),
+          { product: 'Demo' },
+        ),
+      'agent',
+    );
     const result = await client.callTool({
       name: 'send_feedback',
       arguments: { message: 'x' },

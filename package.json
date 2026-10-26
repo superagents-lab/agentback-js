@@ -1,6 +1,6 @@
 {
   "name": "agentback",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Collect feedback from AI agents inside your MCP server, CLI, or API and manage it in Agentback.",
   "license": "MIT",
   "homepage": "https://agentback.app",
@@ -36,11 +36,15 @@
     "check:package": "node scripts/check-package.mjs"
   },
   "peerDependencies": {
-    "@modelcontextprotocol/sdk": "^1.20.0",
-    "zod": "^3.25 || ^4.0"
+    "@modelcontextprotocol/sdk": "^1.23.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.2.0"
   },
   "peerDependenciesMeta": {
     "@modelcontextprotocol/sdk": {
+      "optional": true
+    },
+    "@modelcontextprotocol/server": {
       "optional": true
     },
     "zod": {
@@ -48,15 +52,17 @@
     }
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
     "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/server": "2.4.0",
     "@types/node": "22.19.0",
+    "prettier": "3.9.9",
     "typescript": "5.9.3",
-    "zod": "4.6.5",
     "vitest": "5.0.3",
-    "prettier": "3.9.9"
+    "zod": "4.6.5"
   },
   "engines": {
-    "node": ">=22.14"
+    "node": ">=20"
   },
   "bugs": {
     "url": "https://github.com/superagents-lab/agentback-js/issues"

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import {
   Agentback,
   AgentbackError,
@@ -28,9 +27,75 @@ export const defaultDescription = (product: string) =>
   `include credentials, personal data, or private user content. Reporting ` +
   `is optional and must not block the user's task.`;
 
+/**
+ * The part of an MCP server this integration uses. Both `McpServer` from
+ * `@modelcontextprotocol/sdk` (v1.23+) and from `@modelcontextprotocol/server`
+ * (v2) satisfy it.
+ */
+export interface McpServerLike {
+  registerTool(
+    name: string,
+    config: {
+      title?: string;
+      description?: string;
+      inputSchema: typeof feedbackInput;
+      annotations?: { readOnlyHint?: boolean; openWorldHint?: boolean };
+    },
+    callback: (
+      args: FeedbackInput,
+      context?: unknown,
+    ) => Promise<{
+      content: { type: 'text'; text: string }[];
+      isError?: boolean;
+    }>,
+  ): unknown;
+  readonly server: {
+    getClientVersion(): ClientInfo | undefined;
+  };
+}
+
+export const feedbackInput = z.object({
+  message: z
+    .string()
+    .min(1)
+    .max(4000)
+    .describe('What went wrong or what was missing, in plain language.'),
+  intent: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe('What you were trying to accomplish.'),
+  category: z.enum(categories).optional(),
+  request_id: z
+    .string()
+    .max(256)
+    .optional()
+    .describe('Request id of the call that had the problem, if known.'),
+  model: z
+    .string()
+    .max(128)
+    .optional()
+    .describe('Your model name, if you know it.'),
+});
+export type FeedbackInput = z.infer<typeof feedbackInput>;
+
+type ClientInfo = { name: string; version: string };
+
+// MCP 2026-07-28 has no initialize handshake: each request carries the client's
+// identity in its _meta envelope, which SDK v2 hands to tool callbacks.
+function requestClientInfo(context: unknown): ClientInfo | undefined {
+  const info = (
+    context as { mcpReq?: { envelope?: Record<string, unknown> } } | undefined
+  )?.mcpReq?.envelope?.['io.modelcontextprotocol/clientInfo'] as
+    Partial<ClientInfo> | undefined;
+  return typeof info?.name === 'string' && typeof info.version === 'string'
+    ? { name: info.name, version: info.version }
+    : undefined;
+}
+
 /** Registers a feedback tool on an MCP server. */
 export function attachToMcp(
-  server: McpServer,
+  server: McpServerLike,
   client: Agentback,
   options: AttachOptions,
 ) {
@@ -39,33 +104,12 @@ export function attachToMcp(
     {
       title: `Send feedback to ${options.product}`,
       description: options.description ?? defaultDescription(options.product),
-      inputSchema: {
-        message: z
-          .string()
-          .min(1)
-          .max(4000)
-          .describe('What went wrong or what was missing, in plain language.'),
-        intent: z
-          .string()
-          .max(2000)
-          .optional()
-          .describe('What you were trying to accomplish.'),
-        category: z.enum(categories).optional(),
-        request_id: z
-          .string()
-          .max(256)
-          .optional()
-          .describe('Request id of the call that had the problem, if known.'),
-        model: z
-          .string()
-          .max(128)
-          .optional()
-          .describe('Your model name, if you know it.'),
-      },
+      inputSchema: feedbackInput,
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
-    async ({ message, intent, category, request_id, model }) => {
-      const clientInfo = server.server.getClientVersion();
+    async ({ message, intent, category, request_id, model }, context) => {
+      const clientInfo =
+        requestClientInfo(context) ?? server.server.getClientVersion();
       const name = clientInfo
         ? `${clientInfo.name} ${clientInfo.version}`.slice(0, 128)
         : undefined;
