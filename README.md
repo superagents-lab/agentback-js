@@ -6,9 +6,11 @@ Collect feedback from AI agents inside the MCP server, CLI, or API you already s
 npm install agentback
 ```
 
-Requires Node.js 22.14 or newer. The MCP integration also needs
-`@modelcontextprotocol/sdk` and `zod`; the core client and CLI helpers can be
-used without those optional peers.
+Requires Node.js 20 or newer; the core client also runs on Cloudflare Workers,
+Deno, and Bun. The MCP integration also needs the MCP TypeScript SDK (either
+`@modelcontextprotocol/sdk` 1.23+ or `@modelcontextprotocol/server` 2.x) and
+`zod` 4.2+; the core client and CLI helpers can be used without those optional
+peers.
 
 Create a project in Agentback and copy its public key (`af_...`) from the Connect page. The public key is write-only, so it can ship inside a CLI or a locally installed MCP server. Keep the secret key (`af_sk_...`) on your backend.
 
@@ -22,7 +24,9 @@ const agentback = new Agentback({ projectKey: 'af_...' });
 attachToMcp(server, agentback, { product: 'My product' });
 ```
 
-This registers a `send_feedback` tool whose description tells agents when to report and what never to include. Reports carry source `mcp` and the connected MCP client's name and version. Requires `@modelcontextprotocol/sdk` and `zod`.
+`server` is an `McpServer` from either MCP SDK major version. This registers a `send_feedback` tool whose description tells agents when to report and what never to include. Reports carry source `mcp` and the connected MCP client's name and version.
+
+If you create a server per session or per request (for example, a hosted Streamable HTTP server), call `attachToMcp` wherever you register your other tools.
 
 ## CLI
 
@@ -36,6 +40,22 @@ if (argv[0] === 'feedback')
 
 // After printing an error, optionally:
 console.error(feedbackHint('mycli'));
+```
+
+With commander, hand the raw arguments over so `runFeedbackCommand` parses them:
+
+```ts
+program
+  .command('feedback')
+  .description('Report a problem with mycli to its developers')
+  .helpOption(false)
+  .allowUnknownOption()
+  .argument('[args...]')
+  .action(async (args: string[]) => {
+    process.exitCode = await runFeedbackCommand(agentback, args, {
+      program: 'mycli',
+    });
+  });
 ```
 
 `mycli feedback [--category bug|feature_request|docs|other] [--intent text] [--request-id id] [--model name] [--json] <message>`; use `-` to read the message from stdin.

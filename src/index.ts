@@ -121,7 +121,7 @@ export class Agentback {
         method: 'POST',
         headers,
         body: JSON.stringify(body),
-        redirect: 'error',
+        redirect: 'manual',
         signal: AbortSignal.timeout(this.#timeoutMs),
       });
     } catch {
