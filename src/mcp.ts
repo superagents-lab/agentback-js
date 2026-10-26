@@ -41,13 +41,16 @@ export interface McpServerLike {
       inputSchema: typeof feedbackInput;
       annotations?: { readOnlyHint?: boolean; openWorldHint?: boolean };
     },
-    callback: (args: FeedbackInput) => Promise<{
+    callback: (
+      args: FeedbackInput,
+      context?: unknown,
+    ) => Promise<{
       content: { type: 'text'; text: string }[];
       isError?: boolean;
     }>,
   ): unknown;
   readonly server: {
-    getClientVersion(): { name: string; version: string } | undefined;
+    getClientVersion(): ClientInfo | undefined;
   };
 }
 
@@ -76,6 +79,20 @@ export const feedbackInput = z.object({
 });
 export type FeedbackInput = z.infer<typeof feedbackInput>;
 
+type ClientInfo = { name: string; version: string };
+
+// MCP 2026-07-28 has no initialize handshake: each request carries the client's
+// identity in its _meta envelope, which SDK v2 hands to tool callbacks.
+function requestClientInfo(context: unknown): ClientInfo | undefined {
+  const info = (
+    context as { mcpReq?: { envelope?: Record<string, unknown> } } | undefined
+  )?.mcpReq?.envelope?.['io.modelcontextprotocol/clientInfo'] as
+    Partial<ClientInfo> | undefined;
+  return typeof info?.name === 'string' && typeof info.version === 'string'
+    ? { name: info.name, version: info.version }
+    : undefined;
+}
+
 /** Registers a feedback tool on an MCP server. */
 export function attachToMcp(
   server: McpServerLike,
@@ -90,8 +107,9 @@ export function attachToMcp(
       inputSchema: feedbackInput,
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
-    async ({ message, intent, category, request_id, model }) => {
-      const clientInfo = server.server.getClientVersion();
+    async ({ message, intent, category, request_id, model }, context) => {
+      const clientInfo =
+        requestClientInfo(context) ?? server.server.getClientVersion();
       const name = clientInfo
         ? `${clientInfo.name} ${clientInfo.version}`.slice(0, 128)
         : undefined;

@@ -6,6 +6,7 @@ import {
   McpServer as McpServerV2,
   InMemoryTransport as InMemoryTransportV2,
 } from '@modelcontextprotocol/server';
+import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { Client as ClientV2 } from '@modelcontextprotocol/client';
 import { Agentback, AgentbackError, signAccount } from '../src/index.js';
 import { attachToMcp } from '../src/mcp.js';
@@ -141,6 +142,36 @@ const mcpSdks = [
     },
   },
 ];
+
+describe('MCP integration (v2, 2026-07-28 protocol)', () => {
+  it('reads the client name from the per-request envelope', async () => {
+    const { calls, fetch } = recorder();
+    const [a, b] = InMemoryTransportV2.createLinkedPair();
+    const handle = serveStdio(
+      () => {
+        const server = new McpServerV2({ name: 'demo', version: '1.0.0' });
+        attachToMcp(server, new Agentback({ projectKey, fetch }), {
+          product: 'Demo',
+        });
+        return server;
+      },
+      { transport: a },
+    );
+    const client = new ClientV2(
+      { name: 'modern-agent', version: '3.1' },
+      { versionNegotiation: { mode: { pin: '2026-07-28' } } },
+    );
+    await client.connect(b);
+    const result = await client.callTool({
+      name: 'send_feedback',
+      arguments: { message: 'x' },
+    });
+    await client.close();
+    await handle.close();
+    expect(result.isError).toBeFalsy();
+    expect(calls[0]!.body.agent).toEqual({ name: 'modern-agent 3.1' });
+  });
+});
 
 describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
   it('registers a feedback tool that reports the MCP client and account', async () => {
