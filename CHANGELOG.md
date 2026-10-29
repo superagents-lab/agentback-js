@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Web widget: `color` takes `{ light, dark }` for a separate button colour in each theme, and the new `textColor` sets the button's text colour (a hex or `{ light, dark }`; unset, it still picks dark or white by contrast). Script tag: `data-color-dark`, `data-text-color`, `data-text-color-dark`.
+
 ## 0.3.0
 
 - Web feedback widget for the people using your web app: `agentback/web` (`createFeedbackWidget`) and a script-tag build at `agentback/widget.js`, served at https://agentback.app/widget.js.

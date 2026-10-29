@@ -31,6 +31,16 @@ function parseCategories(value?: string): false | WidgetCategory[] | undefined {
     });
 }
 
+// `data-color="#007bff" data-color-dark="#3396ff"` sets each theme apart;
+// a missing light value keeps the default for that theme.
+function themed(
+  light: string | undefined,
+  dark: string | undefined,
+  fallback: string,
+) {
+  return dark ? { light: light ?? fallback, dark } : light;
+}
+
 const script = document.currentScript as HTMLScriptElement | null;
 const data = script?.dataset ?? {};
 // Served by an Agentback deployment, the widget reports to that deployment.
@@ -51,7 +61,9 @@ function start() {
     projectKey: data.project,
     origin,
     product: data.product,
-    color: data.color,
+    color: themed(data.color, data.colorDark, 'orange'),
+    // An empty light text colour is read as "pick one that reads well".
+    textColor: themed(data.textColor, data.textColorDark, ''),
     theme: data.theme as WidgetTheme | undefined,
     launcher: data.launcher !== 'false',
     position: data.position === 'bottom-left' ? 'bottom-left' : 'bottom-right',

@@ -10,6 +10,8 @@ import {
 
 export type WidgetColor =
   'orange' | 'neutral' | 'blue' | 'violet' | (string & {});
+/** One value for both themes, or a separate one for each. */
+export type ThemedValue<T> = T | { light: T; dark: T };
 export type WidgetTheme = 'auto' | 'light' | 'dark';
 export type WidgetLocale = 'en' | 'zh';
 export type WidgetCategory = Category | { value: Category; label: string };
@@ -44,8 +46,16 @@ export interface FeedbackWidgetOptions {
   origin?: string;
   /** Your product's name, used in the thank-you message. */
   product?: string;
-  /** A preset or any CSS hex colour. Defaults to `orange`. */
-  color?: WidgetColor;
+  /**
+   * A preset or any CSS hex colour, or `{ light, dark }` for a separate one
+   * in each theme. Defaults to `orange`.
+   */
+  color?: ThemedValue<WidgetColor>;
+  /**
+   * Text on the button, as a hex colour or `{ light, dark }`. Defaults to
+   * whichever of dark or white reads better on `color`.
+   */
+  textColor?: ThemedValue<string>;
   /** `auto` follows the visitor's system setting. */
   theme?: WidgetTheme;
   /** Show the floating button. Turn it off to open from your own menu. */
@@ -154,11 +164,34 @@ export function readableOn(hex: string): string {
   return (l + 0.05) / 0.0593 > 1.05 / (l + 0.05) ? '#18181B' : '#FFFFFF';
 }
 
-function accent(color: WidgetColor = 'orange'): [string, string] {
-  const preset = presets[color];
-  if (preset) return preset;
-  if (/^#([0-9a-f]{6}|[0-9a-f]{3})$/i.test(color)) return [color, color];
-  return presets.orange!;
+const hex = (value: string) => /^#([0-9a-f]{6}|[0-9a-f]{3})$/i.test(value);
+
+/** [light, dark] button colours, each one a preset's own shade or a hex. */
+function accent(color: ThemedValue<WidgetColor> = 'orange'): [string, string] {
+  const [light, dark] =
+    typeof color === 'string' ? [color, color] : [color.light, color.dark];
+  const pick = (value: WidgetColor, theme: 0 | 1) =>
+    presets[value]?.[theme] ?? (hex(value) ? value : undefined);
+  const l = pick(light, 0);
+  const d = pick(dark, 1);
+  return l && d ? [l, d] : presets.orange!;
+}
+
+/** [light, dark] text colours: the given hex, or readable on the button. */
+function onAccent(
+  [light, dark]: [string, string],
+  text: ThemedValue<string> | undefined,
+): [string, string] {
+  const [l, d] =
+    text === undefined
+      ? []
+      : typeof text === 'string'
+        ? [text, text]
+        : [text.light, text.dark];
+  return [
+    l && hex(l) ? l : readableOn(light),
+    d && hex(d) ? d : readableOn(dark),
+  ];
 }
 
 function pickLocale(locale?: WidgetLocale): WidgetLocale {
@@ -279,6 +312,7 @@ export function createFeedbackWidget(
           )
           .filter((c) => allCategories.includes(c.value));
   const [light, dark] = accent(options.color);
+  const [onLight, onDark] = onAccent([light, dark], options.textColor);
   let identity = signed(options.identity);
   let stage: Stage = 'compose';
   let category: Category | undefined;
@@ -290,8 +324,8 @@ export function createFeedbackWidget(
   host.dataset.theme = options.theme ?? 'auto';
   host.style.setProperty('--accent-light', light);
   host.style.setProperty('--accent-dark', dark);
-  host.style.setProperty('--on-accent-light', readableOn(light));
-  host.style.setProperty('--on-accent-dark', readableOn(dark));
+  host.style.setProperty('--on-accent-light', onLight);
+  host.style.setProperty('--on-accent-dark', onDark);
   // Take the page's typeface so the widget reads as part of the product.
   const pageFont = getComputedStyle(document.body).fontFamily;
   host.style.setProperty(

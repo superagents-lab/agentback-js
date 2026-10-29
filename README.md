@@ -88,6 +88,8 @@ A floating Feedback button opens the panel. Reports carry source `web` and the p
 | Option (`data-` attribute) | Default                     |                                                                                                                                     |
 | -------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `color`                    | `orange`                    | `orange`, `neutral`, `blue`, `violet`, or any hex colour                                                                            |
+| `color-dark`               |                             | the button colour in dark mode, when it should differ from `color` (in code: `color: { light, dark }`)                              |
+| `text-color`               | readable on `color`         | the button's text colour as a hex; `text-color-dark` for dark mode (in code: `textColor: { light, dark }`)                          |
 | `launcher`                 | `true`                      | `false` hides the floating button; open the panel from your own menu                                                                |
 | `position`                 | `bottom-right`              | or `bottom-left`                                                                                                                    |
 | `theme`                    | `auto`                      | `light` or `dark` to match your app's own switch                                                                                    |
