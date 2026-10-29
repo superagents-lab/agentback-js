@@ -2,7 +2,7 @@ export const DEFAULT_ORIGIN = 'https://agentback.app';
 
 export const categories = ['bug', 'feature_request', 'docs', 'other'] as const;
 export type Category = (typeof categories)[number];
-export type Source = 'direct' | 'api' | 'mcp' | 'cli';
+export type Source = 'direct' | 'api' | 'mcp' | 'cli' | 'web';
 
 export interface Feedback {
   /** What went wrong or what was missing. Required, at most 4000 characters. */
@@ -13,10 +13,15 @@ export interface Feedback {
   /** The id of the original call that had the problem, not of this report. */
   request_id?: string;
   agent?: { name?: string; model?: string };
+  /** The web page the report was sent from, e.g. `https://example.com/billing`. */
+  page?: string;
 }
 
 export interface SendOptions {
-  /** Defaults to `mcp`/`cli` from the integrations, otherwise `direct` or `api`. */
+  /**
+   * Defaults to `mcp`/`cli`/`web` from the integrations, otherwise `direct`
+   * or `api`. Use `web` for reports a person typed in your web app.
+   */
   source?: Source;
   /**
    * Your opaque reference for the end user or tenant. Never an email.

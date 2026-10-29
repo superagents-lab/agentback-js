@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- Web feedback widget for the people using your web app: `agentback/web` (`createFeedbackWidget`) and a script-tag build at `agentback/widget.js`, served at https://agentback.app/widget.js.
+- New `web` source and `page` field on reports.
+
 ## 0.1.1
 
 - Fix release package checks for npm 12's JSON output.

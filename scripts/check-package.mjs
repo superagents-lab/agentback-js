@@ -16,10 +16,11 @@ try {
   // npm 12 keys results by package name; earlier npm versions use an array.
   const [pack] = Array.isArray(packed) ? packed : Object.values(packed);
   const files = pack.files.map(({ path }) => path);
-  for (const entry of ['index', 'mcp', 'cli']) {
+  for (const entry of ['index', 'mcp', 'cli', 'web']) {
     assert(files.includes(`dist/${entry}.js`));
     assert(files.includes(`dist/${entry}.d.ts`));
   }
+  assert(files.includes('dist/widget.js'));
   assert(files.includes('LICENSE'));
   assert(files.includes('README.md'));
   assert(
@@ -49,6 +50,9 @@ try {
       import assert from 'node:assert/strict';
       import { Agentback, signAccount } from 'agentback';
       import { feedbackHint } from 'agentback/cli';
+      import { createFeedbackWidget } from 'agentback/web';
+      assert.equal(typeof createFeedbackWidget, 'function');
+      assert(import.meta.resolve('agentback/widget.js').endsWith('/dist/widget.js'));
       assert.equal(typeof signAccount, 'function');
       assert.match(feedbackHint('demo'), /demo feedback/);
       const client = new Agentback({
