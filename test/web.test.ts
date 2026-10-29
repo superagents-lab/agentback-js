@@ -168,4 +168,38 @@ describe('feedback widget', () => {
     const host = root.host as HTMLElement;
     expect(host.style.getPropertyValue('--accent-light')).toBe('#0EA5E9');
   });
+
+  it('takes a colour and text colour per theme', () => {
+    const { root } = mount({
+      color: { light: '#007bff', dark: '#3396ff' },
+      textColor: { light: '#ffffff', dark: '#1d1c11' },
+    });
+    const css = (root.host as HTMLElement).style;
+    expect(css.getPropertyValue('--accent-light')).toBe('#007bff');
+    expect(css.getPropertyValue('--accent-dark')).toBe('#3396ff');
+    expect(css.getPropertyValue('--on-accent-light')).toBe('#ffffff');
+    expect(css.getPropertyValue('--on-accent-dark')).toBe('#1d1c11');
+  });
+
+  it('uses one text colour in both themes and picks one when unset', () => {
+    widget = createFeedbackWidget({
+      projectKey,
+      color: '#007bff',
+      textColor: '#fff',
+    });
+    let css = (document.querySelector('[data-agentback]') as HTMLElement).style;
+    expect(css.getPropertyValue('--on-accent-light')).toBe('#fff');
+    expect(css.getPropertyValue('--on-accent-dark')).toBe('#fff');
+    widget.destroy();
+    widget = createFeedbackWidget({
+      projectKey,
+      color: { light: 'neutral', dark: 'neutral' },
+      textColor: { light: 'nope', dark: '#000' },
+    });
+    css = (document.querySelector('[data-agentback]') as HTMLElement).style;
+    expect(css.getPropertyValue('--accent-light')).toBe('#18181B');
+    expect(css.getPropertyValue('--accent-dark')).toBe('#FAFAFA');
+    expect(css.getPropertyValue('--on-accent-light')).toBe('#FFFFFF');
+    expect(css.getPropertyValue('--on-accent-dark')).toBe('#000');
+  });
 });
