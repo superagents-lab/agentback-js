@@ -11,6 +11,8 @@ import {
 export interface FeedbackCommandOptions {
   /** Your CLI's name, used in help and hints, e.g. `mycli`. */
   program: string;
+  /** Your CLI's version, attached to every report, e.g. `pkg.version`. */
+  version?: string;
   /** Returns the logged-in user's account (and signature for project keys). */
   identify?: IdentityProvider;
   stdout?: { write(text: string): unknown };
@@ -27,8 +29,13 @@ Report a problem with ${program} to its developers. Use "-" to read the
 message from stdin. Do not include credentials or private data.
 
 Options:
-  -c, --category <bug|feature_request|docs|other>
+  -c, --category <bug|friction|feature_request|docs|other>
+                           friction: it worked, but only after retries,
+                           workarounds or guessing
   -i, --intent <text>      What you were trying to do
+  -e, --expected <text>    What you expected to happen
+  -a, --actual <text>      What happened instead, including the error text
+  -t, --tool <command>     The ${program} command that had the problem
   -r, --request-id <id>    Request id of the call that had the problem
   -m, --model <name>       Your model name, if you are an AI agent
       --json               Print the receipt as JSON
@@ -58,6 +65,9 @@ export async function runFeedbackCommand(
       options: {
         category: { type: 'string', short: 'c' },
         intent: { type: 'string', short: 'i' },
+        expected: { type: 'string', short: 'e' },
+        actual: { type: 'string', short: 'a' },
+        tool: { type: 'string', short: 't' },
         'request-id': { type: 'string', short: 'r' },
         model: { type: 'string', short: 'm' },
         json: { type: 'boolean' },
@@ -93,6 +103,10 @@ export async function runFeedbackCommand(
       {
         message,
         intent: values.intent,
+        expected: values.expected,
+        actual: values.actual,
+        tool: values.tool,
+        version: options.version?.slice(0, 64),
         category,
         request_id: values['request-id'],
         agent: values.model ? { model: values.model } : undefined,

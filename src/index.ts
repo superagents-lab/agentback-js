@@ -1,6 +1,15 @@
 export const DEFAULT_ORIGIN = 'https://agentback.app';
 
-export const categories = ['bug', 'feature_request', 'docs', 'other'] as const;
+/**
+ * `friction`: it worked, but only after retries, workarounds or guessing.
+ */
+export const categories = [
+  'bug',
+  'friction',
+  'feature_request',
+  'docs',
+  'other',
+] as const;
 export type Category = (typeof categories)[number];
 export type Source = 'direct' | 'api' | 'mcp' | 'cli' | 'web';
 
@@ -9,6 +18,14 @@ export interface Feedback {
   message: string;
   /** What the agent was trying to do. */
   intent?: string;
+  /** What the reporter expected to happen. At most 2000 characters. */
+  expected?: string;
+  /** What happened instead, including the error text. At most 4000 characters. */
+  actual?: string;
+  /** Your product's tool, command or endpoint involved, e.g. `search`. */
+  tool?: string;
+  /** Your product's version, e.g. `2.3.1`. The integrations set it. */
+  version?: string;
   category?: Category;
   /** The id of the original call that had the problem, not of this report. */
   request_id?: string;

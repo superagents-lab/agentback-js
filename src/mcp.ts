@@ -12,6 +12,11 @@ export interface AttachOptions {
   product: string;
   /** Defaults to `send_feedback`. */
   toolName?: string;
+  /**
+   * Your server's version, attached to every report. Defaults to the version
+   * the `McpServer` was created with.
+   */
+  version?: string;
   /** Replaces the default tool description. */
   description?: string;
   /** Returns the current user's account (and signature for project keys). */
@@ -21,9 +26,11 @@ export interface AttachOptions {
 export const defaultDescription = (product: string) =>
   `Report a problem with ${product} to its developers: a wrong, empty or ` +
   `incomplete result, an error you could not resolve, documentation that ` +
-  `did not match behavior, or a capability you needed but ${product} lacks. ` +
+  `did not match behavior, a step that worked only after retries, ` +
+  `workarounds or guessing, or a capability you needed but ${product} lacks. ` +
   `Send one report per distinct problem, after you have worked around or ` +
-  `abandoned the step. Do not report normal successful results. Never ` +
+  `abandoned the step. Name the tool involved and say what you expected and ` +
+  `what happened instead. Do not report normal successful results. Never ` +
   `include credentials, personal data, or private user content. Reporting ` +
   `is optional and must not block the user's task.`;
 
@@ -65,7 +72,29 @@ export const feedbackInput = z.object({
     .max(2000)
     .optional()
     .describe('What you were trying to accomplish.'),
-  category: z.enum(categories).optional(),
+  expected: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe('What you expected to happen.'),
+  actual: z
+    .string()
+    .max(4000)
+    .optional()
+    .describe('What happened instead, including the error text.'),
+  tool: z
+    .string()
+    .max(128)
+    .optional()
+    .describe('Name of the tool that had the problem, if any.'),
+  category: z
+    .enum(categories)
+    .optional()
+    .describe(
+      'bug: a wrong result or an error. friction: it worked, but only after ' +
+        'retries, workarounds or guessing. feature_request: a missing ' +
+        'capability. docs: documentation did not match behavior.',
+    ),
   request_id: z
     .string()
     .max(256)
@@ -93,6 +122,14 @@ function requestClientInfo(context: unknown): ClientInfo | undefined {
     : undefined;
 }
 
+// Neither SDK exposes the server's own name and version publicly, but both
+// keep what the McpServer was constructed with on the low-level Server.
+function serverVersion(server: McpServerLike): string | undefined {
+  const info = (server.server as { _serverInfo?: { version?: unknown } })
+    ._serverInfo;
+  return typeof info?.version === 'string' ? info.version : undefined;
+}
+
 /** Registers a feedback tool on an MCP server. */
 export function attachToMcp(
   server: McpServerLike,
@@ -107,7 +144,10 @@ export function attachToMcp(
       inputSchema: feedbackInput,
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
-    async ({ message, intent, category, request_id, model }, context) => {
+    async (
+      { message, intent, expected, actual, tool, category, request_id, model },
+      context,
+    ) => {
       const clientInfo =
         requestClientInfo(context) ?? server.server.getClientVersion();
       const name = clientInfo
@@ -118,6 +158,10 @@ export function attachToMcp(
           {
             message,
             intent,
+            expected,
+            actual,
+            tool,
+            version: (options.version ?? serverVersion(server))?.slice(0, 64),
             category,
             request_id,
             agent: name || model ? { name, model } : undefined,
