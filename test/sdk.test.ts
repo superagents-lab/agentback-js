@@ -190,17 +190,44 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
     expect(tools[0]!.inputSchema.required).toEqual(['message']);
     const result = await client.callTool({
       name: 'send_feedback',
-      arguments: { message: 'No dates', category: 'bug', model: 'm-1' },
+      arguments: {
+        message: 'No dates',
+        expected: 'A published date per result',
+        actual: 'date is undefined',
+        tool: 'search',
+        category: 'friction',
+        model: 'm-1',
+      },
     });
     expect(result.isError).toBeFalsy();
     expect(calls[0]!.body).toEqual({
       message: 'No dates',
-      category: 'bug',
+      expected: 'A published date per result',
+      actual: 'date is undefined',
+      tool: 'search',
+      version: '1.0.0',
+      category: 'friction',
       agent: { name: 'test-agent 2.0', model: 'm-1' },
       source: 'mcp',
       account: 'acct',
       account_signature: 'e'.repeat(64),
     });
+  });
+  it('lets the integration set the version', async () => {
+    const { calls, fetch } = recorder();
+    const client = await connect(
+      (server) =>
+        attachToMcp(server, new Agentback({ projectKey, fetch }), {
+          product: 'Demo',
+          version: '2.3.1',
+        }),
+      'agent',
+    );
+    await client.callTool({
+      name: 'send_feedback',
+      arguments: { message: 'x' },
+    });
+    expect(calls[0]!.body.version).toBe('2.3.1');
   });
   it('rejects invalid arguments before sending', async () => {
     const { calls, fetch } = recorder();
@@ -250,17 +277,27 @@ describe('CLI integration', () => {
         'docs',
         '-i',
         'find articles',
+        '--expected',
+        'a date per result',
+        '-a',
+        'Error: Unknown option: --dates',
+        '-t',
+        'search',
         'Dates',
         'missing',
         '--json',
       ],
-      { program: 'demo', stdout, stderr: sink() },
+      { program: 'demo', version: '2.3.1', stdout, stderr: sink() },
     );
     expect(code).toBe(0);
     expect(JSON.parse(stdout.text)).toEqual({ id: 'fb_1', status: 'new' });
     expect(calls[0]!.body).toEqual({
       message: 'Dates missing',
       intent: 'find articles',
+      expected: 'a date per result',
+      actual: 'Error: Unknown option: --dates',
+      tool: 'search',
+      version: '2.3.1',
       category: 'docs',
       source: 'cli',
     });

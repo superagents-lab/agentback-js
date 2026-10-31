@@ -35,6 +35,7 @@ export interface WidgetText {
   rateLimited: string;
   poweredBy: string;
   bug: string;
+  friction: string;
   feature_request: string;
   docs: string;
   other: string;
@@ -111,6 +112,7 @@ const locales: Record<WidgetLocale, WidgetText> = {
     rateLimited: 'Too many reports from this network. Try again in a minute.',
     poweredBy: 'Powered by',
     bug: 'Problem',
+    friction: 'Hard to use',
     feature_request: 'Idea',
     docs: 'Docs',
     other: 'Other',
@@ -133,6 +135,7 @@ const locales: Record<WidgetLocale, WidgetText> = {
     rateLimited: '这个网络发送得太频繁了，请一分钟后再试。',
     poweredBy: 'Powered by',
     bug: '问题',
+    friction: '不好用',
     feature_request: '建议',
     docs: '文档',
     other: '其他',
