@@ -164,7 +164,7 @@ describe('MCP integration (v2, 2026-07-28 protocol)', () => {
     await client.connect(b);
     const result = await client.callTool({
       name: 'send_feedback',
-      arguments: { message: 'x' },
+      arguments: { message: 'x', outcome: 'blocked' },
     });
     await client.close();
     await handle.close();
@@ -187,7 +187,8 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
     const { tools } = await client.listTools();
     expect(tools.map((t) => t.name)).toEqual(['send_feedback']);
     expect(tools[0]!.description).toContain('Demo');
-    expect(tools[0]!.inputSchema.required).toEqual(['message']);
+    expect(tools[0]!.inputSchema.required).toEqual(['message', 'outcome']);
+    expect(tools[0]!.description).toContain('do not need to ask the user');
     const result = await client.callTool({
       name: 'send_feedback',
       arguments: {
@@ -195,7 +196,9 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
         expected: 'A published date per result',
         actual: 'date is undefined',
         tool: 'search',
-        category: 'friction',
+        outcome: 'friction',
+        category: 'bug',
+        suggestion: 'Return dates',
         model: 'm-1',
       },
     });
@@ -206,7 +209,9 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
       actual: 'date is undefined',
       tool: 'search',
       version: '1.0.0',
-      category: 'friction',
+      category: 'bug',
+      outcome: 'friction',
+      suggestion: 'Return dates',
       agent: { name: 'test-agent 2.0', model: 'm-1' },
       source: 'mcp',
       account: 'acct',
@@ -225,7 +230,7 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
     );
     await client.callTool({
       name: 'send_feedback',
-      arguments: { message: 'x' },
+      arguments: { message: 'x', outcome: 'blocked' },
     });
     expect(calls[0]!.body.version).toBe('2.3.1');
   });
@@ -240,7 +245,7 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
     );
     const result = await client.callTool({
       name: 'send_feedback',
-      arguments: { message: '', category: 'praise' },
+      arguments: { message: 'x', outcome: 'blocked', category: 'friction' },
     });
     expect(result.isError).toBe(true);
     expect(calls).toHaveLength(0);
@@ -260,9 +265,101 @@ describe.each(mcpSdks)('MCP integration ($version)', ({ connect }) => {
     );
     const result = await client.callTool({
       name: 'send_feedback',
-      arguments: { message: 'x' },
+      arguments: { message: 'x', outcome: 'blocked' },
     });
     expect(result.isError).toBe(true);
+  });
+});
+
+describe('MCP integration (per-request servers)', () => {
+  // Calls the registered callback the way a stateless HTTP server would: the
+  // initialize handshake happened on another McpServer.
+  function capture(
+    options: Parameters<typeof attachToMcp>[2],
+    fetch: typeof globalThis.fetch,
+  ) {
+    let callback: (
+      args: never,
+      context?: unknown,
+    ) => Promise<{ content: { text: string }[]; isError?: boolean }>;
+    attachToMcp(
+      {
+        registerTool: (
+          _name: string,
+          _config: unknown,
+          cb: typeof callback,
+        ) => {
+          callback = cb;
+        },
+        server: { getClientVersion: () => undefined },
+      } as never,
+      new Agentback({ projectKey, fetch }),
+      options,
+    );
+    return (args: Record<string, unknown>, context?: unknown) =>
+      callback!(args as never, context);
+  }
+  it('names the agent from the User-Agent and passes authInfo to identify', async () => {
+    const { calls, fetch } = recorder();
+    const identify = vi.fn(() => ({
+      account: 'user_1',
+      signature: 'e'.repeat(64),
+    }));
+    const call = capture({ product: 'Demo', identify }, fetch);
+    const authInfo = {
+      token: 't',
+      clientId: 'c',
+      scopes: [],
+      extra: { userId: 'user_1' },
+    };
+    await call(
+      { message: 'x', outcome: 'blocked' },
+      {
+        authInfo,
+        requestInfo: {
+          headers: { 'user-agent': 'claude-code/2.1.0 (darwin)' },
+        },
+      },
+    );
+    expect(identify).toHaveBeenCalledWith(
+      expect.objectContaining({ authInfo }),
+    );
+    expect(calls[0]!.body.agent).toEqual({ name: 'claude-code 2.1.0' });
+    expect(calls[0]!.body.account).toBe('user_1');
+    await call(
+      { message: 'x', outcome: 'blocked' },
+      { requestInfo: { headers: { 'user-agent': 'node' } } },
+    );
+    expect(calls[1]!.body.agent).toBeUndefined();
+  });
+  it('tells the agent not to resend, and logs what only the developer can fix', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const offline = capture({ product: 'Demo' }, async () => {
+      throw new TypeError('fetch failed');
+    });
+    expect(
+      (await offline({ message: 'x', outcome: 'blocked' })).content[0]!.text,
+    ).toContain('may already have been recorded');
+    const missing = capture(
+      { product: 'Demo' },
+      recorder(404, { error: 'Project not found.' }).fetch,
+    );
+    const result = await missing({ message: 'x', outcome: 'blocked' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0]!.text).toBe(
+      'Feedback could not be sent. Do not retry; continue the task.',
+    );
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining('Check the project key'),
+    );
+    const limited = capture(
+      { product: 'Demo' },
+      recorder(429, { error: 'Too many reports.' }).fetch,
+    );
+    expect(
+      (await limited({ message: 'x', outcome: 'blocked' })).content[0]!.text,
+    ).toContain('Do not retry');
+    error.mockRestore();
   });
 });
 
@@ -275,6 +372,10 @@ describe('CLI integration', () => {
       [
         '--category',
         'docs',
+        '-o',
+        'worked_around',
+        '--suggestion',
+        'Document --dates',
         '-i',
         'find articles',
         '--expected',
@@ -299,6 +400,8 @@ describe('CLI integration', () => {
       tool: 'search',
       version: '2.3.1',
       category: 'docs',
+      outcome: 'worked_around',
+      suggestion: 'Document --dates',
       source: 'cli',
     });
   });
@@ -307,7 +410,7 @@ describe('CLI integration', () => {
     const client = new Agentback({ projectKey, fetch });
     const io = { program: 'demo', stdout: sink(), stderr: sink() };
     expect(
-      await runFeedbackCommand(client, ['-'], {
+      await runFeedbackCommand(client, ['-o', 'blocked', '-'], {
         ...io,
         stdin: (async function* () {
           yield 'from stdin\n';
@@ -316,14 +419,51 @@ describe('CLI integration', () => {
     ).toBe(0);
     expect(calls[0]!.body.message).toBe('from stdin');
     expect(await runFeedbackCommand(client, [], io)).toBe(2);
-    expect(await runFeedbackCommand(client, ['-c', 'nope', 'x'], io)).toBe(2);
+    expect(
+      await runFeedbackCommand(
+        client,
+        ['-o', 'blocked', '-c', 'nope', 'x'],
+        io,
+      ),
+    ).toBe(2);
+    const missing = sink();
+    expect(
+      await runFeedbackCommand(client, ['x'], { ...io, stderr: missing }),
+    ).toBe(2);
+    expect(missing.text).toContain('--outcome is required');
+    expect(
+      await runFeedbackCommand(
+        client,
+        ['-o', 'friction', '-c', 'friction', 'x'],
+        io,
+      ),
+    ).toBe(2);
     const failing = new Agentback({
       projectKey,
       fetch: recorder(400, { error: 'Bad.' }).fetch,
     });
     const stderr = sink();
-    expect(await runFeedbackCommand(failing, ['x'], { ...io, stderr })).toBe(1);
+    expect(
+      await runFeedbackCommand(failing, ['-o', 'blocked', 'x'], {
+        ...io,
+        stderr,
+      }),
+    ).toBe(1);
     expect(stderr.text).toContain('Bad.');
+    const offline = new Agentback({
+      projectKey,
+      fetch: async () => {
+        throw new TypeError('fetch failed');
+      },
+    });
+    const unsure = sink();
+    expect(
+      await runFeedbackCommand(offline, ['-o', 'blocked', 'x'], {
+        ...io,
+        stderr: unsure,
+      }),
+    ).toBe(1);
+    expect(unsure.text).toContain('Do not send it again');
     expect(feedbackHint('demo')).toContain('demo feedback');
   });
 });

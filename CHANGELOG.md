@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.6.0
+
+- Reports take `outcome`, how the reporter's task ended: `blocked` (could not finish), `worked_around` (finished another way) or `friction` (finished, but only after retries or guessing), and `suggestion`, what would have helped.
+- `friction` is now an outcome instead of a category; categories are `bug`, `feature_request`, `docs` and `other`. The web widget's `friction` type ("Hard to use") files the report with the friction outcome.
+- MCP: `send_feedback` requires `outcome` and takes `suggestion`. Its description asks agents to report once the task is finished or abandoned, says they need not ask the user first, and calls a missing capability the most useful report.
+- MCP: on a server that builds an `McpServer` per request, reports name the agent from the HTTP `User-Agent` when the client's name is not known (generic clients such as `node` or `curl` are skipped).
+- MCP: `identify` receives the tool call's request (`authInfo` and the SDK's context), so a hosted server can sign the account that made the call.
+- MCP: failures tell the agent not to resend; after a timeout, that the report may already be recorded. Errors only the developer can fix, such as a wrong project key, are logged with `console.error`.
+- CLI: `--outcome` is required and `--suggestion` is new. After a timeout the command says the report may already be sent.
+- Needs an Agentback server that accepts `outcome` and `suggestion` (agentback.app does from this release).
+
 ## 0.5.0
 
 - Reports take `expected` (what the reporter expected), `actual` (what happened instead, with the error text), `tool` (your product's tool, command or endpoint) and `version` (your product's version).
