@@ -1,16 +1,15 @@
 export const DEFAULT_ORIGIN = 'https://agentback.app';
 
-/**
- * `friction`: it worked, but only after retries, workarounds or guessing.
- */
-export const categories = [
-  'bug',
-  'friction',
-  'feature_request',
-  'docs',
-  'other',
-] as const;
+/** What kind of problem a report is about. */
+export const categories = ['bug', 'feature_request', 'docs', 'other'] as const;
 export type Category = (typeof categories)[number];
+/**
+ * How the reporter's task ended. `blocked`: it could not finish.
+ * `worked_around`: it finished another way. `friction`: it finished, but only
+ * after retries or guessing.
+ */
+export const outcomes = ['blocked', 'worked_around', 'friction'] as const;
+export type Outcome = (typeof outcomes)[number];
 export type Source = 'direct' | 'api' | 'mcp' | 'cli' | 'web';
 
 export interface Feedback {
@@ -27,6 +26,10 @@ export interface Feedback {
   /** Your product's version, e.g. `2.3.1`. The integrations set it. */
   version?: string;
   category?: Category;
+  /** How the reporter's task ended. */
+  outcome?: Outcome;
+  /** What would have helped. At most 2000 characters. */
+  suggestion?: string;
   /** The id of the original call that had the problem, not of this report. */
   request_id?: string;
   agent?: { name?: string; model?: string };
@@ -199,8 +202,14 @@ export interface Identity {
   account: string;
   signature?: string;
 }
-export type IdentityProvider = () =>
-  Identity | undefined | Promise<Identity | undefined>;
+/**
+ * Returns who is reporting. The MCP integration passes the tool call's
+ * request (see `McpRequest` in `agentback/mcp`), so a server that serves many
+ * users can sign the right account per request.
+ */
+export type IdentityProvider<Request = void> = (
+  request: Request,
+) => Identity | undefined | Promise<Identity | undefined>;
 
 export const identityOptions = (identity?: Identity): SendOptions =>
   identity

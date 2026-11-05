@@ -98,6 +98,21 @@ describe('feedback widget', () => {
     expect($('.send .label').textContent).toBe('Try again');
   });
 
+  it('files "Hard to use" as the friction outcome', async () => {
+    const { $, type, settle, calls, root } = mount({
+      categories: ['friction', 'bug'],
+    });
+    widget!.open();
+    const chips = Array.from(root.querySelectorAll<HTMLButtonElement>('.chip'));
+    expect(chips.map((c) => c.textContent)).toEqual(['Hard to use', 'Problem']);
+    chips[0]!.click();
+    type('Exporting took five tries.');
+    $<HTMLButtonElement>('.send').click();
+    await settle();
+    expect(calls[0]!.body).toMatchObject({ outcome: 'friction' });
+    expect(calls[0]!.body).not.toHaveProperty('category');
+  });
+
   it('relabels, reorders or hides the types and can leave out the page', async () => {
     const relabelled = mount({
       categories: [{ value: 'feature_request', label: 'Suggestion' }, 'bug'],

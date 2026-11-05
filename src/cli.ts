@@ -4,8 +4,10 @@ import {
   AgentbackError,
   categories,
   identityOptions,
+  outcomes,
   type Category,
   type IdentityProvider,
+  type Outcome,
 } from './index.js';
 
 export interface FeedbackCommandOptions {
@@ -23,18 +25,24 @@ export interface FeedbackCommandOptions {
 
 export const feedbackHelp = (
   program: string,
-) => `Usage: ${program} feedback [options] <message>
+) => `Usage: ${program} feedback --outcome <outcome> [options] <message>
 
-Report a problem with ${program} to its developers. Use "-" to read the
-message from stdin. Do not include credentials or private data.
+Report a problem with ${program} to its developers, once you have finished
+your task or given up on it. Use "-" to read the message from stdin. Do not
+include credentials or private data.
 
 Options:
-  -c, --category <bug|friction|feature_request|docs|other>
-                           friction: it worked, but only after retries,
-                           workarounds or guessing
+  -o, --outcome <blocked|worked_around|friction>
+                           How your task ended (required). blocked: you
+                           could not finish. worked_around: you finished
+                           another way. friction: you finished, but only
+                           after retries or guessing
+  -c, --category <bug|feature_request|docs|other>
   -i, --intent <text>      What you were trying to do
   -e, --expected <text>    What you expected to happen
-  -a, --actual <text>      What happened instead, including the error text
+  -a, --actual <text>      What happened instead: the commands you ran and
+                           the error text
+  -s, --suggestion <text>  What would have helped
   -t, --tool <command>     The ${program} command that had the problem
   -r, --request-id <id>    Request id of the call that had the problem
   -m, --model <name>       Your model name, if you are an AI agent
@@ -44,7 +52,7 @@ Options:
 
 /** A line to print after an error so agents know they can report it. */
 export const feedbackHint = (program: string) =>
-  `If this looks like a problem with ${program}, report it: ${program} feedback "<what happened>"`;
+  `If this looks like a problem with ${program}, report it: ${program} feedback --outcome blocked "<what happened>"`;
 
 /**
  * Runs the `feedback` subcommand. Pass the arguments after `feedback`.
@@ -63,7 +71,9 @@ export async function runFeedbackCommand(
       args: argv,
       allowPositionals: true,
       options: {
+        outcome: { type: 'string', short: 'o' },
         category: { type: 'string', short: 'c' },
+        suggestion: { type: 'string', short: 's' },
         intent: { type: 'string', short: 'i' },
         expected: { type: 'string', short: 'e' },
         actual: { type: 'string', short: 'a' },
@@ -94,8 +104,18 @@ export async function runFeedbackCommand(
     message = text.trim();
   }
   const category = values.category as Category | undefined;
-  if (!message || (category && !categories.includes(category))) {
-    err.write(feedbackHelp(options.program));
+  const outcome = values.outcome as Outcome | undefined;
+  const problem = !message
+    ? 'A message is required.'
+    : !outcome
+      ? `--outcome is required: ${outcomes.join(', ')}.`
+      : !outcomes.includes(outcome)
+        ? `Unknown outcome "${outcome}": use ${outcomes.join(', ')}.`
+        : category && !categories.includes(category)
+          ? `Unknown category "${category}": use ${categories.join(', ')}.`
+          : '';
+  if (problem) {
+    err.write(`${problem}\n\n${feedbackHelp(options.program)}`);
     return 2;
   }
   try {
@@ -108,6 +128,8 @@ export async function runFeedbackCommand(
         tool: values.tool,
         version: options.version?.slice(0, 64),
         category,
+        outcome,
+        suggestion: values.suggestion,
         request_id: values['request-id'],
         agent: values.model ? { model: values.model } : undefined,
       },
@@ -122,9 +144,18 @@ export async function runFeedbackCommand(
   } catch (error) {
     const reason =
       error instanceof AgentbackError ? error.message : 'Unexpected error.';
+    // A timeout may come after Agentback stored the report.
+    const unsure = error instanceof AgentbackError && error.status === 0;
     if (values.json)
-      out.write(`${JSON.stringify({ error: reason, sent: false })}\n`);
-    else err.write(`Feedback was not sent: ${reason}\n`);
+      out.write(
+        `${JSON.stringify({ error: reason, sent: unsure ? 'unknown' : false })}\n`,
+      );
+    else
+      err.write(
+        unsure
+          ? `Feedback may already have been sent (${reason}). Do not send it again.\n`
+          : `Feedback was not sent: ${reason}\n`,
+      );
     return 1;
   }
 }

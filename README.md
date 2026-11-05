@@ -24,7 +24,11 @@ const agentback = new Agentback({ projectKey: 'af_...' });
 attachToMcp(server, agentback, { product: 'My product' });
 ```
 
-`server` is an `McpServer` from either MCP SDK major version. This registers a `send_feedback` tool whose description tells agents when to report and what never to include. Agents can name the tool that had the problem and say what they expected and what happened instead. Reports carry source `mcp`, the connected MCP client's name and version, and your server's version from the `McpServer` constructor (pass `version` to override it).
+`server` is an `McpServer` from either MCP SDK major version. This registers a `send_feedback` tool whose description tells agents when to report and what never to include. Agents say how their task ended (`outcome`: `blocked`, `worked_around` or `friction`), and can name the tool that had the problem, say what they expected and what happened instead, and suggest what would have helped. Reports carry source `mcp`, the connected MCP client's name and version (from the HTTP `User-Agent` when a per-request server never saw the client's handshake), and your server's version from the `McpServer` constructor (pass `version` to override it).
+
+If a report cannot be stored, the tool tells the agent not to resend it and to continue its task; errors only you can fix, such as a wrong project key, are logged with `console.error`.
+
+To try it, ask an agent connected to your server to do something your tools cannot do. It should report that before it finishes.
 
 If you create a server per session or per request (for example, a hosted Streamable HTTP server), call `attachToMcp` wherever you register your other tools.
 
@@ -59,7 +63,7 @@ program
   });
 ```
 
-`mycli feedback [--category bug|friction|feature_request|docs|other] [--intent text] [--expected text] [--actual text] [--tool command] [--request-id id] [--model name] [--json] <message>`; use `-` to read the message from stdin. `friction` means it worked, but only after retries, workarounds or guessing.
+`mycli feedback --outcome blocked|worked_around|friction [--category bug|feature_request|docs|other] [--suggestion text] [--intent text] [--expected text] [--actual text] [--tool command] [--request-id id] [--model name] [--json] <message>`; use `-` to read the message from stdin. `--outcome` is required: `blocked` means the task could not finish, `worked_around` that it finished another way, `friction` that it finished, but only after retries or guessing.
 
 ## Web app
 
@@ -86,18 +90,18 @@ const feedback = createFeedbackWidget({
 
 A floating Feedback button opens the panel. Reports carry source `web` and the page's address (origin and path, never the query string). The panel follows the visitor's light or dark setting and uses your page's font.
 
-| Option (`data-` attribute) | Default                     |                                                                                                                                  |
-| -------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `color`                    | `orange`                    | `orange`, `neutral`, `blue`, `violet`, or any hex colour                                                                         |
-| `color-dark`               |                             | the button colour in dark mode, when it should differ from `color` (in code: `color: { light, dark }`)                           |
-| `text-color`               | readable on `color`         | the button's text colour as a hex; `text-color-dark` for dark mode (in code: `textColor: { light, dark }`)                       |
-| `launcher`                 | `true`                      | `false` hides the floating button; open the panel from your own menu                                                             |
-| `position`                 | `bottom-right`              | or `bottom-left`                                                                                                                 |
-| `theme`                    | `auto`                      | `light` or `dark` to match your app's own switch                                                                                 |
-| `categories`               | `bug,feature_request,other` | order, relabel (`bug:Report a bug,other`) or hide (`false`) the types from `bug`, `friction`, `feature_request`, `docs`, `other` |
-| `product`                  |                             | your product's name, used in the thank-you message                                                                               |
-| `locale`                   | page `lang`                 | `en` or `zh`; override any string with the `text` option                                                                         |
-| `page`                     | `true`                      | `false` leaves out the page address                                                                                              |
+| Option (`data-` attribute) | Default                     |                                                                                                                                                                                         |
+| -------------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `color`                    | `orange`                    | `orange`, `neutral`, `blue`, `violet`, or any hex colour                                                                                                                                |
+| `color-dark`               |                             | the button colour in dark mode, when it should differ from `color` (in code: `color: { light, dark }`)                                                                                  |
+| `text-color`               | readable on `color`         | the button's text colour as a hex; `text-color-dark` for dark mode (in code: `textColor: { light, dark }`)                                                                              |
+| `launcher`                 | `true`                      | `false` hides the floating button; open the panel from your own menu                                                                                                                    |
+| `position`                 | `bottom-right`              | or `bottom-left`                                                                                                                                                                        |
+| `theme`                    | `auto`                      | `light` or `dark` to match your app's own switch                                                                                                                                        |
+| `categories`               | `bug,feature_request,other` | order, relabel (`bug:Report a bug,other`) or hide (`false`) the types from `bug`, `friction`, `feature_request`, `docs`, `other`; `friction` ("Hard to use") files the friction outcome |
+| `product`                  |                             | your product's name, used in the thank-you message                                                                                                                                      |
+| `locale`                   | page `lang`                 | `en` or `zh`; override any string with the `text` option                                                                                                                                |
+| `page`                     | `true`                      | `false` leaves out the page address                                                                                                                                                     |
 
 To open it from your own button, mark the element; no code needed:
 
@@ -130,6 +134,18 @@ attachToMcp(server, agentback, {
 });
 ```
 
+A hosted MCP server that serves many users gets the tool call's request in `identify`, with the `authInfo` your MCP auth middleware verified:
+
+```ts
+attachToMcp(server, agentback, {
+  product: 'My product',
+  identify: async ({ authInfo }) => {
+    const account = authInfo?.extra?.userId as string | undefined;
+    return account ? { account } : undefined; // a secretKey client needs no signature
+  },
+});
+```
+
 Use an opaque id, never an email. Rotating the project's secret key also replaces the identity secret and invalidates existing signatures.
 
 ## Server
@@ -139,7 +155,18 @@ const agentback = new Agentback({
   secretKey: process.env.AGENTBACK_SECRET_KEY!,
 });
 await agentback.send(
-  { message, intent, expected, actual, tool, version, category, request_id },
+  {
+    message,
+    intent,
+    expected,
+    actual,
+    tool,
+    version,
+    category,
+    outcome,
+    suggestion,
+    request_id,
+  },
   {
     source: 'api',
     account: tenantId,

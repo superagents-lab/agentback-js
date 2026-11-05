@@ -14,7 +14,13 @@ export type WidgetColor =
 export type ThemedValue<T> = T | { light: T; dark: T };
 export type WidgetTheme = 'auto' | 'light' | 'dark';
 export type WidgetLocale = 'en' | 'zh';
-export type WidgetCategory = Category | { value: Category; label: string };
+/**
+ * A report type people can pick: a category, or `friction` ("Hard to use"),
+ * which files the report with the friction outcome.
+ */
+export type WidgetType = Category | 'friction';
+export type WidgetCategory = WidgetType | { value: WidgetType; label: string };
+const widgetTypes: readonly WidgetType[] = [...allCategories, 'friction'];
 
 export interface WidgetText {
   launcher: string;
@@ -313,12 +319,12 @@ export function createFeedbackWidget(
               ? { value: c, label: text[c] }
               : { value: c.value, label: c.label },
           )
-          .filter((c) => allCategories.includes(c.value));
+          .filter((c) => widgetTypes.includes(c.value));
   const [light, dark] = accent(options.color);
   const [onLight, onDark] = onAccent([light, dark], options.textColor);
   let identity = signed(options.identity);
   let stage: Stage = 'compose';
-  let category: Category | undefined;
+  let category: WidgetType | undefined;
   let anchor: Element | null = null;
   let open = false;
 
@@ -473,7 +479,11 @@ ${options.includePage === false ? '' : `<p class="note">${esc(text.pageNote)}</p
       const receipt = await client.send(
         {
           message,
-          ...(category ? { category } : {}),
+          ...(category === 'friction'
+            ? { outcome: 'friction' as const }
+            : category
+              ? { category }
+              : {}),
           ...(options.includePage === false
             ? {}
             : { page: location.origin + location.pathname }),
@@ -521,7 +531,7 @@ ${options.includePage === false ? '' : `<p class="note">${esc(text.pageNote)}</p
   });
   for (const chip of chips)
     chip.addEventListener('click', () => {
-      const value = chip.dataset.value as Category;
+      const value = chip.dataset.value as WidgetType;
       category = category === value ? undefined : value;
       render();
     });
