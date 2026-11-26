@@ -69,9 +69,14 @@ function start() {
     position: data.position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
     categories: parseCategories(data.categories),
     locale: data.locale as WidgetLocale | undefined,
-    identity: data.account
-      ? { account: data.account, signature: data.signature }
-      : undefined,
+    identity:
+      data.account || data.email
+        ? {
+            account: data.account,
+            signature: data.signature,
+            email: data.email,
+          }
+        : undefined,
     includePage: data.page !== 'false',
   });
   window.Agentback = widget;

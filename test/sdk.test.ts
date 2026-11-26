@@ -58,6 +58,29 @@ describe('Agentback client', () => {
     });
     expect(new Headers(calls[0]!.init.headers).get('authorization')).toBeNull();
   });
+
+  it('sends a trimmed email with either key, without a signature', async () => {
+    const { calls, fetch } = recorder();
+    await new Agentback({ projectKey, fetch }).send(
+      { message: 'x' },
+      { email: ' ada@example.com ' },
+    );
+    await new Agentback({ secretKey, fetch }).send(
+      { message: 'x' },
+      { email: 'ada@example.com', account: 'acct' },
+    );
+    await new Agentback({ projectKey, fetch }).send(
+      { message: 'x' },
+      { email: '  ' },
+    );
+    expect(calls[0]!.body).toEqual({ message: 'x', email: 'ada@example.com' });
+    expect(calls[1]!.body).toEqual({
+      message: 'x',
+      account: 'acct',
+      email: 'ada@example.com',
+    });
+    expect(calls[2]!.body).toEqual({ message: 'x' });
+  });
   it('refuses fields a public client cannot vouch for', async () => {
     const client = new Agentback({ projectKey, fetch: recorder().fetch });
     await expect(
