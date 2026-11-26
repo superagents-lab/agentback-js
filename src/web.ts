@@ -76,7 +76,10 @@ export interface FeedbackWidgetOptions {
   /** Defaults to the page's `lang`: `zh` for Chinese, otherwise `en`. */
   locale?: WidgetLocale;
   text?: Partial<WidgetText>;
-  /** The signed-in user, signed on your backend with `signAccount`. */
+  /**
+   * The signed-in user: `account` signed on your backend with `signAccount`,
+   * and/or their `email` (no signature needed).
+   */
   identity?: Identity;
   /** Send the page's address (origin and path, never the query). */
   includePage?: boolean;
@@ -588,14 +591,18 @@ ${options.includePage === false ? '' : `<p class="note">${esc(text.pageNote)}</p
   return widget;
 }
 
-// A web page cannot vouch for an account, so it needs your backend's signature.
+// A web page cannot vouch for an account, so it needs your backend's
+// signature. An email is self-reported and kept either way.
 function signed(identity?: Identity): Identity | undefined {
   if (!identity) return undefined;
-  if (identity.account?.trim() && identity.signature) return identity;
-  console.warn(
-    'Agentback: identity needs { account, signature } from signAccount on your backend; sending anonymously.',
-  );
-  return undefined;
+  const email = identity.email?.trim() || undefined;
+  if (identity.account?.trim() && identity.signature)
+    return { ...identity, email };
+  if (identity.account?.trim() || identity.signature)
+    console.warn(
+      'Agentback: identity needs { account, signature } from signAccount on your backend; sending without the account.',
+    );
+  return email ? { email } : undefined;
 }
 
 function esc(value: string) {

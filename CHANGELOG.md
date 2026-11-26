@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.0
+
+- Reports take an optional `email`, the reporter's address so you can reply. Pass it in `send()` options or return it from `identify` (`{ account?, signature?, email? }`); it needs no signature, and `account` is now optional in an identity. With a project key it is self-reported, like `source`.
+- Web widget: `data-email` on the script tag, or `email` in `identify()`. An unsigned account is still dropped, but the email is kept.
+- Needs an Agentback server that accepts `email` (agentback.app does from this release).
+
 ## 0.6.0
 
 - Reports take `outcome`, how the reporter's task ended: `blocked` (could not finish), `worked_around` (finished another way) or `friction` (finished, but only after retries or guessing), and `suggestion`, what would have helped.

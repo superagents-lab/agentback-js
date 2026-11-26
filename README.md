@@ -102,6 +102,7 @@ A floating Feedback button opens the panel. Reports carry source `web` and the p
 | `product`                  |                             | your product's name, used in the thank-you message                                                                                                                                      |
 | `locale`                   | page `lang`                 | `en` or `zh`; override any string with the `text` option                                                                                                                                |
 | `page`                     | `true`                      | `false` leaves out the page address                                                                                                                                                     |
+| `email`                    |                             | the signed-in user's email, so you can reply to them                                                                                                                                    |
 
 To open it from your own button, mark the element; no code needed:
 
@@ -111,7 +112,7 @@ To open it from your own button, mark the element; no code needed:
 
 The widget is also available as `window.Agentback` after the `agentback:ready` event (the return value of `createFeedbackWidget` from npm): `open(anchor?)`, `close()`, `toggle()`, `identify(identity | null)`, `setTheme(theme)` and `destroy()`.
 
-To attach the signed-in user, sign their account on your backend as in [Verified accounts](#verified-accounts), then pass both to the page: `data-account` and `data-signature` on the script tag, or `Agentback.identify({ account, signature })` after sign-in. Without a signature, reports stay anonymous.
+To attach the signed-in user, sign their account on your backend as in [Verified accounts](#verified-accounts), then pass both to the page: `data-account` and `data-signature` on the script tag, or `Agentback.identify({ account, signature })` after sign-in. Without a signature, the account is left out. To be able to reply, also pass their email (`data-email`, or `email` in `identify`); it needs no signature.
 
 To build your own form instead, call `send()` from the browser with `{ source: 'web' }` and an optional `page`.
 
@@ -146,7 +147,19 @@ attachToMcp(server, agentback, {
 });
 ```
 
-Use an opaque id, never an email. Rotating the project's secret key also replaces the identity secret and invalidates existing signatures.
+Use an opaque id as the account. Rotating the project's secret key also replaces the identity secret and invalidates existing signatures.
+
+## Reporter email
+
+To reply to whoever sent a report, pass their email. It is optional and separate from the account, needs no signature, and shows on the report in the inbox:
+
+```ts
+identify: (() => ({ account: accountId, signature, email: user.email }),
+  // or, per report:
+  await agentback.send(feedback, { email: user.email }));
+```
+
+With a project key the email is self-reported, like `source`: anyone with the key can send any address, so check before acting on it. With a secret key it comes from your backend.
 
 ## Server
 
@@ -170,6 +183,7 @@ await agentback.send(
   {
     source: 'api',
     account: tenantId,
+    email: user.email, // optional
     context: { endpoint: '/search', status_code: 200 },
   },
 );

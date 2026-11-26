@@ -163,6 +163,21 @@ describe('feedback widget', () => {
     warn.mockRestore();
   });
 
+  it('keeps the email when the account is unsigned', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { $, type, settle, calls } = mount({
+      identity: { account: 'user_1', email: ' ada@example.com ' },
+    });
+    expect(warn).toHaveBeenCalledOnce();
+    widget!.open();
+    type('Hello');
+    $<HTMLButtonElement>('.send').click();
+    await settle();
+    expect(calls[0]!.body.email).toBe('ada@example.com');
+    expect(calls[0]!.body).not.toHaveProperty('account');
+    warn.mockRestore();
+  });
+
   it('speaks Chinese on a Chinese page and closes on Escape', () => {
     document.documentElement.lang = 'zh-CN';
     const { $ } = mount();

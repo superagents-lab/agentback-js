@@ -44,12 +44,18 @@ export interface SendOptions {
    */
   source?: Source;
   /**
-   * Your opaque reference for the end user or tenant. Never an email.
-   * With a project key it must come with `accountSignature`.
+   * Your opaque reference for the end user or tenant, such as a user id.
+   * Put an email in `email` instead. With a project key it must come with
+   * `accountSignature`.
    */
   account?: string;
   /** From `signAccount`, computed on your backend. Project-key clients only. */
   accountSignature?: string;
+  /**
+   * The reporter's email, so you can reply. Needs no signature: with a
+   * project key it is self-reported, like `source`.
+   */
+  email?: string;
   /** Secret-key clients only: details of the call that had the problem. */
   context?: { endpoint?: string; status_code?: number; duration_ms?: number };
 }
@@ -135,6 +141,7 @@ export class Agentback {
       if (options.account) body.account = options.account.trim();
       if (options.context) body.context = options.context;
     }
+    if (options.email?.trim()) body.email = options.email.trim();
     if (options.source) body.source = options.source;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -197,10 +204,14 @@ export async function signAccount(
     await crypto.subtle.sign('HMAC', key, encoder.encode(account.trim())),
   );
 }
-/** Who is reporting. `signature` is required with a projectKey client. */
+/**
+ * Who is reporting. With a projectKey client, `account` needs `signature`;
+ * `email` never does.
+ */
 export interface Identity {
-  account: string;
+  account?: string;
   signature?: string;
+  email?: string;
 }
 /**
  * Returns who is reporting. The MCP integration passes the tool call's
@@ -211,7 +222,9 @@ export type IdentityProvider<Request = void> = (
   request: Request,
 ) => Identity | undefined | Promise<Identity | undefined>;
 
-export const identityOptions = (identity?: Identity): SendOptions =>
-  identity
+export const identityOptions = (identity?: Identity): SendOptions => ({
+  ...(identity?.account
     ? { account: identity.account, accountSignature: identity.signature }
-    : {};
+    : {}),
+  ...(identity?.email ? { email: identity.email } : {}),
+});
